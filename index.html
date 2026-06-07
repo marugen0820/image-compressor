@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniPic - スマート画像圧縮</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: #e8f0e9;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        /* ─── Header ─── */
+        header {
+            background: #1b2e22;
+            padding: 14px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+
+        nav { display: flex; gap: 28px; }
+        nav a {
+            color: rgba(255,255,255,0.65);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        nav a:hover { color: white; }
+
+        /* ─── Hero ─── */
+        .hero {
+            background: linear-gradient(175deg, #1b2e22 0%, #2b5239 45%, #3a7a52 100%);
+            padding: 56px 40px 0;
+            position: relative;
+            overflow: hidden;
+            min-height: 400px;
+        }
+
+        .hero-inner {
+            max-width: 860px;
+            margin: 0 auto;
+            display: flex;
+            align-items: flex-end;
+            gap: 32px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* ─── Panda ─── */
+        .panda-wrap {
+            flex-shrink: 0;
+            width: 160px;
+            padding-bottom: 0;
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .panda-wrap svg {
+            width: 100%;
+            height: auto;
+            filter: drop-shadow(0 8px 20px rgba(0,0,0,0.35));
+        }
+
+        /* ─── Drop zone ─── */
+        .drop-section {
+            flex: 1;
+            padding-bottom: 28px;
+        }
+
+        .drop-section h1 {
+            color: white;
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 6px;
+            line-height: 1.2;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .drop-section .subtitle {
+            color: rgba(255,255,255,0.72);
+            font-size: 1rem;
+            margin-bottom: 22px;
+        }
+
+        .drop-zone {
+            background: rgba(255,255,255,0.13);
+            border: 2.5px dashed rgba(255,255,255,0.55);
+            border-radius: 18px;
+            padding: 44px 32px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(6px);
+        }
+
+        .drop-zone:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.85);
+        }
+
+        .drop-zone.drag-over {
+            background: rgba(116,198,130,0.28);
+            border-color: #74c682;
+            transform: scale(1.015);
+        }
+
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        .drop-icon {
+            font-size: 2.6rem;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .drop-zone h2 {
+            color: white;
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .drop-zone p {
+            color: rgba(255,255,255,0.65);
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .format-tags {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .format-tag {
+            background: rgba(255,255,255,0.18);
+            color: rgba(255,255,255,0.85);
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* ─── Grass ─── */
+        .grass-row {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            pointer-events: none;
+        }
+
+        .grass-row svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ─── Main ─── */
+        main {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 32px 40px 60px;
+        }
+
+        /* ─── Stats ─── */
+        .stats-bar {
+            background: white;
+            border-radius: 14px;
+            padding: 18px 28px;
+            display: none;
+            gap: 0;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+            border: 1px solid #dce8dc;
+        }
+
+        .stat {
+            flex: 1;
+            text-align: center;
+            padding: 0 16px;
+            border-right: 1px solid #e8ede8;
+        }
+
+        .stat:last-child { border-right: none; }
+
+        .stat-value {
+            font-size: 1.7rem;
+            font-weight: 800;
+            color: #2b6640;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        /* ─── File list ─── */
+        #fileList { display: flex; flex-direction: column; gap: 10px; }
+
+        .file-item {
+            background: white;
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            border: 1px solid #e0eae0;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-thumb {
+            width: 46px;
+            height: 46px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #f0f5f0;
+            flex-shrink: 0;
+            border: 1px solid #dde8dd;
+        }
+
+        .file-info { flex: 1; min-width: 0; }
+
+        .file-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #1b2e22;
+        }
+
+        .file-meta {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        .savings { color: #2b7a4a; font-weight: 700; }
+
+        .prog-bar {
+            height: 3px;
+            background: #e8ede8;
+            border-radius: 2px;
+            margin-top: 7px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #5ab870, #2b6640);
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .badge-pending  { background: #fff3cd; color: #7a5c04; }
+        .badge-done     { background: #d4edda; color: #1a5c35; }
+        .badge-error    { background: #f8d7da; color: #721c24; }
+
+        .dl-btn {
+            background: #2b6640;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            white-space: nowrap;
+            transition: background 0.2s, transform 0.1s;
+            flex-shrink: 0;
+        }
+
+        .dl-btn:hover { background: #1a4730; transform: scale(1.03); }
+
+        /* ─── Actions ─── */
+        .actions-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 18px;
+            display: none;
+        }
+
+        .clear-btn {
+            background: none;
+            border: 1.5px solid #bbc;
+            color: #888;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .clear-btn:hover { border-color: #888; color: #444; }
+
+        .dl-all-btn {
+            background: #1b2e22;
+            color: white;
+            border: none;
+            padding: 10px 26px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .dl-all-btn:hover { background: #0e1a14; transform: scale(1.02); }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #aaa;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────── -->
+<header>
+    <div class="logo">
+        <!-- Mini panda logo -->
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="15" fill="white"/>
+            <circle cx="9"  cy="7"  r="6"  fill="#222"/>
+            <circle cx="23" cy="7"  r="6"  fill="#222"/>
+            <ellipse cx="11" cy="17" rx="4.5" ry="5" fill="#222" transform="rotate(-10 11 17)"/>
+            <ellipse cx="21" cy="17" rx="4.5" ry="5" fill="#222" transform="rotate(10 21 17)"/>
+            <circle cx="11.5" cy="16" r="2" fill="white"/>
+            <circle cx="20.5" cy="16" r="2" fill="white"/>
+            <circle cx="12"   cy="16.5" r="1.2" fill="#111"/>
+            <circle cx="21"   cy="16.5" r="1.2" fill="#111"/>
+            <ellipse cx="16" cy="22" rx="2.8" ry="1.8" fill="#555"/>
+            <path d="M 13.5 25 Q 16 27.5 18.5 25" stroke="#555" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+        MiniPic
+    </div>
+    <nav>
+        <a href="#">使い方</a>
+        <a href="#">API</a>
+        <a href="#">料金</a>
+    </nav>
+</header>
+
+<!-- ── Hero ───────────────────────────────────── -->
+<section class="hero">
+    <div class="hero-inner">
+
+        <!-- Panda mascot -->
+        <div class="panda-wrap">
+            <svg viewBox="0 0 180 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Body -->
+                <ellipse cx="90" cy="160" rx="54" ry="48" fill="white"/>
+                <!-- Legs -->
+                <ellipse cx="68" cy="204" rx="22" ry="14" fill="white"/>
+                <ellipse cx="112" cy="204" rx="22" ry="14" fill="white"/>
+                <ellipse cx="68" cy="207" rx="22" ry="10" fill="#111"/>
+                <ellipse cx="112" cy="207" rx="22" ry="10" fill="#111"/>
+                <!-- Belly -->
+                <ellipse cx="90" cy="162" rx="32" ry="34" fill="#ddd"/>
+                <!-- Arms -->
+                <ellipse cx="44" cy="158" rx="16" ry="10" fill="#111" transform="rotate(-25 44 158)"/>
+                <ellipse cx="136" cy="158" rx="16" ry="10" fill="#111" transform="rotate(25 136 158)"/>
+                <!-- Head -->
+                <circle cx="90" cy="90" r="52" fill="white"/>
+                <!-- Ears -->
+                <circle cx="50" cy="48"  r="22" fill="#111"/>
+                <circle cx="130" cy="48" r="22" fill="#111"/>
+                <circle cx="50" cy="48"  r="12" fill="#333"/>
+                <circle cx="130" cy="48" r="12" fill="#333"/>
+                <!-- Eye patches -->
+                <ellipse cx="72"  cy="85" rx="17" ry="15" fill="#111" transform="rotate(-12 72 85)"/>
+                <ellipse cx="108" cy="85" rx="17" ry="15" fill="#111" transform="rotate(12 108 85)"/>
+                <!-- Eyes -->
+                <circle cx="73"  cy="83" r="7" fill="white"/>
+                <circle cx="107" cy="83" r="7" fill="white"/>
+                <circle cx="74"  cy="84" r="4" fill="#111"/>
+                <circle cx="108" cy="84" r="4" fill="#111"/>
+                <!-- Eye shine -->
+                <circle cx="75.5" cy="82" r="1.8" fill="white"/>
+                <circle cx="109.5" cy="82" r="1.8" fill="white"/>
+                <!-- Nose -->
+                <ellipse cx="90" cy="100" rx="7" ry="5" fill="#555"/>
+                <!-- Mouth -->
+                <path d="M 84 107 Q 90 114 96 107" stroke="#555" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <!-- Bamboo in arms -->
+                <rect x="128" y="130" width="10" height="70" rx="5" fill="#6ab04c"/>
+                <rect x="128" y="145" width="10" height="8" rx="2" fill="#4a8c35"/>
+                <rect x="128" y="163" width="10" height="8" rx="2" fill="#4a8c35"/>
+                <rect x="128" y="181" width="10" height="8" rx="2" fill="#4a8c35"/>
+                <!-- Bamboo leaves -->
+                <ellipse cx="142" cy="128" rx="14" ry="6" fill="#74c676" transform="rotate(-30 142 128)"/>
+                <ellipse cx="150" cy="122" rx="12" ry="5" fill="#5ab860" transform="rotate(-10 150 122)"/>
+                <ellipse cx="122" cy="124" rx="13" ry="5" fill="#74c676" transform="rotate(20 122 124)"/>
+            </svg>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="drop-section">
+            <h1>画像をスマートに圧縮</h1>
+            <p class="subtitle">高品質を保ちながらファイルサイズを大幅に削減</p>
+
+            <div class="drop-zone" id="dropZone">
+                <input type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/webp,image/gif">
+                <span class="drop-icon">🐾</span>
+                <h2>ここに画像をドロップ！</h2>
+                <p>または クリックしてファイルを選択<br>最大50ファイル・各5MBまで</p>
+                <div class="format-tags">
+                    <span class="format-tag">PNG</span>
+                    <span class="format-tag">JPEG</span>
+                    <span class="format-tag">WebP</span>
+                    <span class="format-tag">GIF</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grass decoration -->
+    <div class="grass-row">
+        <svg viewBox="0 0 1440 64" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <style>
+                    .g1 { fill: #3a7a52; }
+                    .g2 { fill: #4a9060; }
+                    .g3 { fill: #2d6040; }
+                    .g4 { fill: #5aaa70; }
+                </style>
+            </defs>
+            <!-- Back grass layer -->
+            <ellipse cx="30"   cy="64" rx="12" ry="48" class="g3"/>
+            <ellipse cx="80"   cy="64" rx="10" ry="38" class="g2"/>
+            <ellipse cx="140"  cy="64" rx="13" ry="52" class="g3"/>
+            <ellipse cx="200"  cy="64" rx="11" ry="44" class="g2"/>
+            <ellipse cx="260"  cy="64" rx="12" ry="50" class="g3"/>
+            <ellipse cx="320"  cy="64" rx="10" ry="40" class="g2"/>
+            <ellipse cx="380"  cy="64" rx="14" ry="55" class="g3"/>
+            <ellipse cx="440"  cy="64" rx="11" ry="42" class="g2"/>
+            <ellipse cx="500"  cy="64" rx="12" ry="48" class="g3"/>
+            <ellipse cx="560"  cy="64" rx="10" ry="36" class="g2"/>
+            <ellipse cx="620"  cy="64" rx="13" ry="52" class="g3"/>
+            <ellipse cx="680"  cy="64" rx="11" ry="44" class="g2"/>
+            <ellipse cx="740"  cy="64" rx="12" ry="50" class="g3"/>
+            <ellipse cx="800"  cy="64" rx="10" ry="40" class="g2"/>
+            <ellipse cx="860"  cy="64" rx="14" ry="55" class="g3"/>
+            <ellipse cx="920"  cy="64" rx="11" ry="42" class="g2"/>
+            <ellipse cx="980"  cy="64" rx="12" ry="48" class="g3"/>
+            <ellipse cx="1040" cy="64" rx="10" ry="36" class="g2"/>
+            <ellipse cx="1100" cy="64" rx="13" ry="52" class="g3"/>
+            <ellipse cx="1160" cy="64" rx="11" ry="44" class="g2"/>
+            <ellipse cx="1220" cy="64" rx="12" ry="50" class="g3"/>
+            <ellipse cx="1280" cy="64" rx="10" ry="40" class="g2"/>
+            <ellipse cx="1340" cy="64" rx="14" ry="55" class="g3"/>
+            <ellipse cx="1400" cy="64" rx="11" ry="42" class="g2"/>
+            <!-- Front grass layer -->
+            <ellipse cx="55"   cy="64" rx="9"  ry="44" class="g4"/>
+            <ellipse cx="110"  cy="64" rx="11" ry="56" class="g1"/>
+            <ellipse cx="170"  cy="64" rx="9"  ry="40" class="g4"/>
+            <ellipse cx="230"  cy="64" rx="12" ry="58" class="g1"/>
+            <ellipse cx="290"  cy="64" rx="9"  ry="44" class="g4"/>
+            <ellipse cx="350"  cy="64" rx="11" ry="54" class="g1"/>
+            <ellipse cx="410"  cy="64" rx="9"  ry="40" class="g4"/>
+            <ellipse cx="470"  cy="64" rx="12" ry="58" class="g1"/>
+            <ellipse cx="530"  cy="64" rx="9"  ry="44" class="g4"/>
+            <ellipse cx="590"  cy="64" rx="11" ry="52" class="g1"/>
+            <ellipse cx="650"  cy="64" rx="9"  ry="40" class="g4"/>
+            <ellipse cx="710"  cy="64" rx="12" ry="58" class="g1"/>
+            <ellipse cx="770"  cy="64" rx="9"  ry="44" class="g4"/>
+            <ellipse cx="830"  cy="64" rx="11" ry="54" class="g1"/>
+            <ellipse cx="890"  cy="64" rx="9"  ry="40" class="g4"/>
+            <ellipse cx="950"  cy="64" rx="12" ry="58" class="g1"/>
+            <ellipse cx="1010" cy="64" rx="9"  ry="44" class="g4"/>
+            <ellipse cx="1070" cy="64" rx="11" ry="52" class="g1"/>
+            <ellipse cx="1130" cy="64" rx="9"  ry="40" class="g4"/>
+            <ellipse cx="1190" cy="64" rx="12" ry="58" class="g1"/>
+            <ellipse cx="1250" cy="64" rx="9"  ry="44" class="g4"/>
+            <ellipse cx="1310" cy="64" rx="11" ry="54" class="g1"/>
+            <ellipse cx="1370" cy="64" rx="9"  ry="40" class="g4"/>
+            <ellipse cx="1430" cy="64" rx="12" ry="58" class="g1"/>
+            <!-- Ground fill -->
+            <rect x="0" y="56" width="1440" height="8" fill="#e8f0e9"/>
+        </svg>
+    </div>
+</section>
+
+<!-- ── Results ────────────────────────────────── -->
+<main>
+    <!-- Stats -->
+    <div class="stats-bar" id="statsBar">
+        <div class="stat">
+            <div class="stat-value" id="statFiles">0</div>
+            <div class="stat-label">処理済みファイル</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="statOriginal">—</div>
+            <div class="stat-label">元のサイズ合計</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="statCompressed">—</div>
+            <div class="stat-label">圧縮後サイズ合計</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="statSavings">—</div>
+            <div class="stat-label">削減率</div>
+        </div>
+    </div>
+
+    <!-- File items -->
+    <div id="fileList"></div>
+
+    <!-- Actions -->
+    <div class="actions-row" id="actionsRow">
+        <button class="clear-btn" id="clearBtn">リセット</button>
+        <button class="dl-all-btn" id="dlAllBtn">ZIPでまとめてダウンロード ↓</button>
+    </div>
+</main>
+
+<footer>MiniPic — あなたの画像をスマートに、もっと軽く</footer>
+
+<!-- browser-image-compression (CDN) -->
+<script src="https://unpkg.com/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+<!-- JSZip: ZIP生成ライブラリ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function () {
+    'use strict';
+
+    /* ─── State ─────────────────────────── */
+    let entries = [];   // { id, file, compressed, url }
+    let totalOrigBytes  = 0;
+    let totalCompBytes  = 0;
+    let doneCount       = 0;
+
+    /* ─── Elements ──────────────────────── */
+    const dropZone   = document.getElementById('dropZone');
+    const fileInput  = document.getElementById('fileInput');
+    const fileList   = document.getElementById('fileList');
+    const statsBar   = document.getElementById('statsBar');
+    const actionsRow = document.getElementById('actionsRow');
+
+    /* ─── Drag & Drop ───────────────────── */
+    dropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        handleFiles(imgs);
+    });
+
+    fileInput.addEventListener('change', e => {
+        handleFiles(Array.from(e.target.files));
+        fileInput.value = '';
+    });
+
+    /* ─── Format helpers ────────────────── */
+    function fmt(bytes) {
+        if (bytes < 1024)        return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    /* ─── Process files ─────────────────── */
+    function handleFiles(files) {
+        if (!files.length) return;
+        statsBar.style.display  = 'flex';
+        actionsRow.style.display = 'flex';
+
+        files.slice(0, 50).forEach(file => {
+            const id = `f${Date.now()}${Math.random().toString(36).slice(2)}`;
+            entries.push({ id, file, compressed: null, url: null });
+            createCard(id, file);
+            compress(id, file);
+        });
+    }
+
+    /* ─── Create file card ──────────────── */
+    function createCard(id, file) {
+        const card = document.createElement('div');
+        card.className = 'file-item';
+        card.id = `card-${id}`;
+        card.innerHTML = `
+            <img class="file-thumb" id="thumb-${id}" src="" alt="${file.name}">
+            <div class="file-info">
+                <div class="file-name">${file.name}</div>
+                <div class="file-meta" id="meta-${id}">元のサイズ: ${fmt(file.size)}</div>
+                <div class="prog-bar"><div class="prog-fill" id="prog-${id}"></div></div>
+            </div>
+            <span class="badge badge-pending" id="badge-${id}">圧縮中…</span>
+            <div id="action-${id}"></div>
+        `;
+        fileList.prepend(card);
+
+        // Thumbnail preview
+        const reader = new FileReader();
+        reader.onload = e => {
+            const el = document.getElementById(`thumb-${id}`);
+            if (el) el.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    /* ─── Compress ──────────────────────── */
+    async function compress(id, file) {
+        const progEl  = document.getElementById(`prog-${id}`);
+        const badgeEl = document.getElementById(`badge-${id}`);
+        const metaEl  = document.getElementById(`meta-${id}`);
+        const actEl   = document.getElementById(`action-${id}`);
+
+        // Fake progress until library reports real progress
+        let fake = 0;
+        const fakeTimer = setInterval(() => {
+            fake = Math.min(fake + Math.random() * 12, 80);
+            if (progEl) progEl.style.width = fake + '%';
+        }, 180);
+
+        try {
+            const opts = {
+                maxSizeMB:        5,
+                maxWidthOrHeight: 4096,
+                useWebWorker:     true,
+                initialQuality:   0.82,
+                onProgress: p => {
+                    if (progEl) progEl.style.width = Math.max(p, fake) + '%';
+                }
+            };
+
+            const compressed = await imageCompression(file, opts);
+
+            clearInterval(fakeTimer);
+            if (progEl) progEl.style.width = '100%';
+
+            const entry = entries.find(e => e.id === id);
+            if (entry) {
+                entry.compressed = compressed;
+                entry.url = URL.createObjectURL(compressed);
+            }
+
+            totalOrigBytes  += file.size;
+            totalCompBytes  += compressed.size;
+            doneCount++;
+
+            const savings = ((1 - compressed.size / file.size) * 100).toFixed(1);
+            if (metaEl) metaEl.innerHTML =
+                `${fmt(file.size)} → ${fmt(compressed.size)} <span class="savings">−${savings}% 削減</span>`;
+
+            if (badgeEl) {
+                badgeEl.className = 'badge badge-done';
+                badgeEl.textContent = '完了 ✓';
+            }
+
+            // Download button
+            if (actEl && entry) {
+                const ext      = file.name.split('.').pop();
+                const baseName = file.name.replace(/\.[^/.]+$/, '');
+                actEl.innerHTML = `
+                    <a class="dl-btn" href="${entry.url}" download="${baseName}_mini.${ext}">ダウンロード</a>
+                `;
+            }
+
+            updateStats();
+
+        } catch (err) {
+            clearInterval(fakeTimer);
+            if (badgeEl) {
+                badgeEl.className   = 'badge badge-error';
+                badgeEl.textContent = 'エラー';
+            }
+            console.error('Compression error:', err);
+        }
+    }
+
+    /* ─── Stats ─────────────────────────── */
+    function updateStats() {
+        document.getElementById('statFiles').textContent      = doneCount;
+        document.getElementById('statOriginal').textContent   = fmt(totalOrigBytes);
+        document.getElementById('statCompressed').textContent = fmt(totalCompBytes);
+        const pct = totalOrigBytes > 0
+            ? ((1 - totalCompBytes / totalOrigBytes) * 100).toFixed(1) + '%'
+            : '—';
+        document.getElementById('statSavings').textContent = pct;
+    }
+
+    /* ─── Download all as ZIP ───────────── */
+    document.getElementById('dlAllBtn').addEventListener('click', async () => {
+        const done = entries.filter(e => e.compressed);
+        if (!done.length) return;
+
+        const btn = document.getElementById('dlAllBtn');
+        btn.textContent = 'ZIPを作成中…';
+        btn.disabled = true;
+
+        try {
+            const zip = new JSZip();
+            const folder = zip.folder('minipic_compressed');
+
+            // ファイル名の重複を防ぐためカウンタ管理
+            const nameCount = {};
+            for (const e of done) {
+                const ext      = e.file.name.split('.').pop();
+                const baseName = e.file.name.replace(/\.[^/.]+$/, '');
+                let fileName   = `${baseName}_mini.${ext}`;
+                if (nameCount[fileName]) {
+                    fileName = `${baseName}_mini_${nameCount[fileName]}.${ext}`;
+                }
+                nameCount[fileName] = (nameCount[fileName] || 0) + 1;
+
+                const arrayBuf = await e.compressed.arrayBuffer();
+                folder.file(fileName, arrayBuf);
+            }
+
+            const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = 'minipic_compressed.zip';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        } catch (err) {
+            console.error('ZIP generation error:', err);
+            alert('ZIPの作成中にエラーが発生しました。');
+        } finally {
+            btn.textContent = 'ZIPでまとめてダウンロード ↓';
+            btn.disabled    = false;
+        }
+    });
+
+    /* ─── Clear / Reset ─────────────────── */
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        entries.forEach(e => { if (e.url) URL.revokeObjectURL(e.url); });
+        entries         = [];
+        totalOrigBytes  = 0;
+        totalCompBytes  = 0;
+        doneCount       = 0;
+        fileList.innerHTML         = '';
+        statsBar.style.display     = 'none';
+        actionsRow.style.display   = 'none';
+    });
+
+})();
+</script>
+</body>
+</html>
