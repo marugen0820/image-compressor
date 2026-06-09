@@ -170,6 +170,67 @@
             font-weight: 600;
         }
 
+        /* ─── Output settings ─── */
+        .settings-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .setting-label {
+            color: rgba(255,255,255,0.60);
+            font-size: 0.76rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .toggle-btns { display: flex; gap: 4px; }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.10);
+            color: rgba(255,255,255,0.65);
+            border: 1.5px solid rgba(255,255,255,0.22);
+            padding: 5px 13px;
+            border-radius: 20px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.20);
+            color: white;
+        }
+
+        .toggle-btn.active {
+            background: #5ab870;
+            color: white;
+            border-color: #5ab870;
+        }
+
+        .webp-badge {
+            display: inline-block;
+            background: #5ab870;
+            color: white;
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-left: 4px;
+            vertical-align: middle;
+            letter-spacing: 0.3px;
+        }
+
         /* ─── Grass ─── */
         .grass-row {
             position: absolute;
@@ -454,6 +515,25 @@
             <h1>画像をスマートに圧縮</h1>
             <p class="subtitle">高品質を保ちながらファイルサイズを大幅に削減</p>
 
+            <!-- Output settings -->
+            <div class="settings-row">
+                <div class="setting-group">
+                    <span class="setting-label">出力形式</span>
+                    <div class="toggle-btns" id="formatBtns">
+                        <button class="toggle-btn" data-format="original">JPG/PNG 圧縮</button>
+                        <button class="toggle-btn active" data-format="webp">WebP 変換</button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <span class="setting-label">品質</span>
+                    <div class="toggle-btns" id="qualityBtns">
+                        <button class="toggle-btn quality-btn" data-quality="0.85">高品質</button>
+                        <button class="toggle-btn quality-btn active" data-quality="0.80">標準</button>
+                        <button class="toggle-btn quality-btn" data-quality="0.65">軽量</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="drop-zone" id="dropZone">
                 <input type="file" id="fileInput" multiple accept="image/png,image/jpeg,image/webp,image/gif">
                 <span class="drop-icon">🐾</span>
@@ -579,10 +659,12 @@
     'use strict';
 
     /* ─── State ─────────────────────────── */
-    let entries = [];   // { id, file, compressed, url }
+    let entries       = [];
     let totalOrigBytes  = 0;
     let totalCompBytes  = 0;
     let doneCount       = 0;
+    let outputFormat    = 'webp';   // 'original' | 'webp'
+    let outputQuality   = 0.80;
 
     /* ─── Elements ──────────────────────── */
     const dropZone   = document.getElementById('dropZone');
@@ -590,6 +672,23 @@
     const fileList   = document.getElementById('fileList');
     const statsBar   = document.getElementById('statsBar');
     const actionsRow = document.getElementById('actionsRow');
+
+    /* ─── Format / Quality toggles ─────── */
+    document.getElementById('formatBtns').addEventListener('click', e => {
+        const btn = e.target.closest('[data-format]');
+        if (!btn) return;
+        outputFormat = btn.dataset.format;
+        document.querySelectorAll('#formatBtns .toggle-btn').forEach(b =>
+            b.classList.toggle('active', b === btn));
+    });
+
+    document.getElementById('qualityBtns').addEventListener('click', e => {
+        const btn = e.target.closest('[data-quality]');
+        if (!btn) return;
+        outputQuality = parseFloat(btn.dataset.quality);
+        document.querySelectorAll('#qualityBtns .toggle-btn').forEach(b =>
+            b.classList.toggle('active', b === btn));
+    });
 
     /* ─── Drag & Drop ───────────────────── */
     dropZone.addEventListener('dragover', e => {
@@ -623,14 +722,14 @@
     /* ─── Process files ─────────────────── */
     function handleFiles(files) {
         if (!files.length) return;
-        statsBar.style.display  = 'flex';
+        statsBar.style.display   = 'flex';
         actionsRow.style.display = 'flex';
 
         files.slice(0, 50).forEach(file => {
             const id = `f${Date.now()}${Math.random().toString(36).slice(2)}`;
-            entries.push({ id, file, compressed: null, url: null });
+            entries.push({ id, file, compressed: null, url: null, outFormat: outputFormat });
             createCard(id, file);
-            compress(id, file);
+            compress(id, file, outputFormat, outputQuality);
         });
     }
 
@@ -646,12 +745,11 @@
                 <div class="file-meta" id="meta-${id}">元のサイズ: ${fmt(file.size)}</div>
                 <div class="prog-bar"><div class="prog-fill" id="prog-${id}"></div></div>
             </div>
-            <span class="badge badge-pending" id="badge-${id}">圧縮中…</span>
+            <span class="badge badge-pending" id="badge-${id}">変換中…</span>
             <div id="action-${id}"></div>
         `;
         fileList.prepend(card);
 
-        // Thumbnail preview
         const reader = new FileReader();
         reader.onload = e => {
             const el = document.getElementById(`thumb-${id}`);
@@ -660,14 +758,37 @@
         reader.readAsDataURL(file);
     }
 
-    /* ─── Compress ──────────────────────── */
-    async function compress(id, file) {
+    /* ─── WebP conversion via Canvas ───── */
+    function convertToWebP(file, quality) {
+        return new Promise((resolve, reject) => {
+            const img    = new Image();
+            const objUrl = URL.createObjectURL(file);
+            img.onload = () => {
+                const canvas  = document.createElement('canvas');
+                canvas.width  = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                URL.revokeObjectURL(objUrl);
+                canvas.toBlob(blob => {
+                    if (blob) resolve(blob);
+                    else reject(new Error('WebP変換に失敗しました'));
+                }, 'image/webp', quality);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(objUrl);
+                reject(new Error('画像の読み込みに失敗しました'));
+            };
+            img.src = objUrl;
+        });
+    }
+
+    /* ─── Compress / Convert ────────────── */
+    async function compress(id, file, format, quality) {
         const progEl  = document.getElementById(`prog-${id}`);
         const badgeEl = document.getElementById(`badge-${id}`);
         const metaEl  = document.getElementById(`meta-${id}`);
         const actEl   = document.getElementById(`action-${id}`);
 
-        // Fake progress until library reports real progress
         let fake = 0;
         const fakeTimer = setInterval(() => {
             fake = Math.min(fake + Math.random() * 12, 80);
@@ -675,17 +796,24 @@
         }, 180);
 
         try {
-            const opts = {
-                maxSizeMB:        5,
-                maxWidthOrHeight: 4096,
-                useWebWorker:     true,
-                initialQuality:   0.82,
-                onProgress: p => {
-                    if (progEl) progEl.style.width = Math.max(p, fake) + '%';
-                }
-            };
+            let compressed;
 
-            const compressed = await imageCompression(file, opts);
+            if (format === 'webp') {
+                const blob  = await convertToWebP(file, quality);
+                const outName = file.name.replace(/\.[^/.]+$/, '') + '.webp';
+                compressed  = new File([blob], outName, { type: 'image/webp' });
+            } else {
+                const opts = {
+                    maxSizeMB:        5,
+                    maxWidthOrHeight: 4096,
+                    useWebWorker:     true,
+                    initialQuality:   quality,
+                    onProgress: p => {
+                        if (progEl) progEl.style.width = Math.max(p, fake) + '%';
+                    }
+                };
+                compressed = await imageCompression(file, opts);
+            }
 
             clearInterval(fakeTimer);
             if (progEl) progEl.style.width = '100%';
@@ -693,28 +821,30 @@
             const entry = entries.find(e => e.id === id);
             if (entry) {
                 entry.compressed = compressed;
-                entry.url = URL.createObjectURL(compressed);
+                entry.url        = URL.createObjectURL(compressed);
+                entry.outFormat  = format;
             }
 
-            totalOrigBytes  += file.size;
-            totalCompBytes  += compressed.size;
+            totalOrigBytes += file.size;
+            totalCompBytes += compressed.size;
             doneCount++;
 
-            const savings = ((1 - compressed.size / file.size) * 100).toFixed(1);
+            const savings    = ((1 - compressed.size / file.size) * 100).toFixed(1);
+            const webpBadge  = format === 'webp' ? ' <span class="webp-badge">WebP</span>' : '';
             if (metaEl) metaEl.innerHTML =
-                `${fmt(file.size)} → ${fmt(compressed.size)} <span class="savings">−${savings}% 削減</span>`;
+                `${fmt(file.size)} → ${fmt(compressed.size)} <span class="savings">−${savings}% 削減</span>${webpBadge}`;
 
             if (badgeEl) {
-                badgeEl.className = 'badge badge-done';
+                badgeEl.className   = 'badge badge-done';
                 badgeEl.textContent = '完了 ✓';
             }
 
-            // Download button
             if (actEl && entry) {
-                const ext      = file.name.split('.').pop();
-                const baseName = file.name.replace(/\.[^/.]+$/, '');
+                const outName = format === 'webp'
+                    ? file.name.replace(/\.[^/.]+$/, '') + '.webp'
+                    : file.name.replace(/\.[^/.]+$/, '') + '_mini.' + file.name.split('.').pop();
                 actEl.innerHTML = `
-                    <a class="dl-btn" href="${entry.url}" download="${baseName}_mini.${ext}">ダウンロード</a>
+                    <a class="dl-btn" href="${entry.url}" download="${outName}">ダウンロード</a>
                 `;
             }
 
@@ -748,20 +878,21 @@
 
         const btn = document.getElementById('dlAllBtn');
         btn.textContent = 'ZIPを作成中…';
-        btn.disabled = true;
+        btn.disabled    = true;
 
         try {
-            const zip = new JSZip();
+            const zip    = new JSZip();
             const folder = zip.folder('minipic_compressed');
 
-            // ファイル名の重複を防ぐためカウンタ管理
             const nameCount = {};
             for (const e of done) {
-                const ext      = e.file.name.split('.').pop();
                 const baseName = e.file.name.replace(/\.[^/.]+$/, '');
-                let fileName   = `${baseName}_mini.${ext}`;
+                const ext      = e.outFormat === 'webp' ? 'webp' : e.file.name.split('.').pop();
+                const suffix   = e.outFormat === 'webp' ? '' : '_mini';
+                let fileName   = `${baseName}${suffix}.${ext}`;
+
                 if (nameCount[fileName]) {
-                    fileName = `${baseName}_mini_${nameCount[fileName]}.${ext}`;
+                    fileName = `${baseName}${suffix}_${nameCount[fileName]}.${ext}`;
                 }
                 nameCount[fileName] = (nameCount[fileName] || 0) + 1;
 
@@ -769,9 +900,13 @@
                 folder.file(fileName, arrayBuf);
             }
 
-            const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 } });
-            const url  = URL.createObjectURL(blob);
-            const a    = document.createElement('a');
+            const blob = await zip.generateAsync({
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 1 }
+            });
+            const url = URL.createObjectURL(blob);
+            const a   = document.createElement('a');
             a.href     = url;
             a.download = 'minipic_compressed.zip';
             a.click();
@@ -788,13 +923,13 @@
     /* ─── Clear / Reset ─────────────────── */
     document.getElementById('clearBtn').addEventListener('click', () => {
         entries.forEach(e => { if (e.url) URL.revokeObjectURL(e.url); });
-        entries         = [];
-        totalOrigBytes  = 0;
-        totalCompBytes  = 0;
-        doneCount       = 0;
-        fileList.innerHTML         = '';
-        statsBar.style.display     = 'none';
-        actionsRow.style.display   = 'none';
+        entries          = [];
+        totalOrigBytes   = 0;
+        totalCompBytes   = 0;
+        doneCount        = 0;
+        fileList.innerHTML       = '';
+        statsBar.style.display   = 'none';
+        actionsRow.style.display = 'none';
     });
 
 })();
